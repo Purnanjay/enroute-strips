@@ -244,7 +244,7 @@ function buildOceanicStrip(f) {
       <td class="callsign-cell" style="font-weight:bold; cursor:pointer;">${f.aircraft}</td>
       <td>1</td>
       <td>${f.dep}</td>
-      <td rowspan="3" style="font-weight:bold; background:#dbeafe; border:1px solid #2563eb; width:40px;">${flNum}</td>
+      <td rowspan="3" style="font-weight:bold; background:#dbeafe; border:1px solid #2563eb; width:40px;"><input value="${flNum}" placeholder="${flNum}"></td>
       ${Array.from({length: colCount}).map((_, i) => {
         const fix = waypoints[i] || "";
         const highlightClass = isOceanicFix(fix) ? "highlighted-fix" : "";

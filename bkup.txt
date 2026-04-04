@@ -12,118 +12,13 @@ const state = {
   flights: {}
 };
 
-const AIRWAY_DB = [
- "ADKIT","XOKRO","SADRI","MEMAK","GIRNA","ELSAR","DUBTA","NOPEX","SULTO","RUPTI",
- "SAMAK","AVNOS","ATIDA","APASI","ANOKO","IDASO","BIKEN","LAGOG","IGOGU","MANPU",
- "DUMAR","AMVUR","AGEGA","DUGOS","NIMOV","PPB","LADER","LULDA","IGREX","VATLA",
- "LEGIN","NISUN","MIPAK","EGOLU","BIDEX",
-];
-
-// ======================= ADDED FROM FIRST CODE =======================
-let AIRWAY_INDEX = {};
-let FIX_DB = {};
-
-async function loadData() {
-  AIRWAY_INDEX = await fetch("airway_index.json").then(r => r.json());
-  FIX_DB = await fetch("fixdb.json").then(r => r.json());
-  console.log("✅ Airway graph loaded");
-}
-
-function cleanToken(token) {
-  if (!token) return "";
-  if (token.includes("/")) token = token.split("/")[0];
-  return token.trim();
-}
-
-function isAirway(token) {
-  return /^[A-Z]\d+[A-Z]*$/.test(token);
-}
-
-function isProcedure(token) {
-  return /\d+[A-Z]$/.test(token);
-}
-
-function findPath(start, end, airway) {
-  const edges = AIRWAY_INDEX[airway];
-  if (!edges) return [];
-
-  let graph = {};
-
-  edges.forEach(([a, b]) => {
-    if (!graph[a]) graph[a] = [];
-    if (!graph[b]) graph[b] = [];
-    graph[a].push(b);
-    graph[b].push(a);
-  });
-
-  let queue = [[start]];
-  let visited = new Set([start]);
-
-  while (queue.length) {
-    let path = queue.shift();
-    let node = path[path.length - 1];
-
-    if (node === end) return path;
-
-    for (let n of (graph[node] || [])) {
-      if (!visited.has(n)) {
-        visited.add(n);
-        queue.push([...path, n]);
-      }
-    }
-  }
-
-  return [];
-}
-
-function expandRoute(tokens) {
-  let result = [];
-
-  for (let i = 0; i < tokens.length; i++) {
-    let token = cleanToken(tokens[i]);
-
-    if (isProcedure(token)) {
-      result.push(token);
-      continue;
-    }
-
-    if (!isAirway(token)) {
-      result.push(token);
-      continue;
-    }
-
-    const entry = cleanToken(tokens[i - 1]);
-    const exit = cleanToken(tokens[i + 1]);
-
-    if (!entry || !exit) continue;
-
-    const segment = findPath(entry, exit, token);
-
-    if (segment.length > 0) {
-      if (result[result.length - 1] === segment[0]) {
-        result.push(...segment.slice(1));
-      } else {
-        result.push(...segment);
-      }
-      i++;
-    }
-  }
-
-  return result;
-}
-
-loadData();
-// ===================================================================
-
-
-// ======================= INJECTION =======================
+// ✅ ======================= INJECTION (ONLY ADDITION) =======================
 const OCEANIC_SET = new Set(AIRWAY_DB);
 
 function isOceanicFix(fix) {
   return OCEANIC_SET.has(fix);
 }
-// ========================================================
-
+// ===========================================================================
 
 // ======================= UTC CLOCK =======================
 function updateUTCTime() {
@@ -147,24 +42,50 @@ function extractRegistration(remarks) {
   return match ? match[1] : "----";
 }
 
+// Determine -E or -W based on cruising altitude
+function getDirectionSuffix(altitude) {
+  if (!altitude) return "-E";
+  let val = parseInt(altitude.toString().replace(/\D/g, ''), 10);
+  if (val >= 1000) val = Math.floor(val / 100);
+  return (val % 2 !== 0) ? "-E" : "-W";
+}
+
 // ======================= ROUTE EXPANSION =======================
 function expandRouteFromVatsim(route, cruiseAltitude) {
   if (!route) return [];
 
-  // prevent crash before data loads
-  if (!AIRWAY_INDEX || Object.keys(AIRWAY_INDEX).length === 0) {
-    console.warn("AIRWAY_INDEX not loaded yet");
-    const tokens = route.toUpperCase().match(/[A-Z0-9]+/g) || [];
-    return tokens.filter(fix => OCEANIC_SET.has(fix));
-  }
-
+  const direction = getDirectionSuffix(cruiseAltitude);
   const tokens = route.toUpperCase().match(/[A-Z0-9]+/g) || [];
+  let waypoints = [];
 
-  // ✅ FULL expansion
-  const expanded = expandRoute(tokens);
+  tokens.forEach(token => {
+    if (typeof AIRWAY_DB === 'undefined') return;
 
-  // ✅ FILTER only oceanic fixes
-  return expanded.filter(fix => OCEANIC_SET.has(fix));
+    const airwayKey = token + direction;
+    if (!AIRWAY_DB[airwayKey]) return;
+
+    let fixes = AIRWAY_DB[airwayKey].filter(fx => fx && fx.trim() !== "");
+    if (fixes.length === 0) return;
+
+    if (direction === "-W") {
+      fixes = fixes.slice().reverse();
+    }
+
+    if (waypoints.length === 0) {
+      waypoints = fixes.slice();
+    } else {
+      const lastFix = waypoints[waypoints.length - 1];
+      const overlapIndex = fixes.indexOf(lastFix);
+
+      if (overlapIndex !== -1) {
+        waypoints = waypoints.concat(fixes.slice(overlapIndex + 1));
+      } else {
+        waypoints = waypoints.concat(fixes);
+      }
+    }
+  });
+
+  return waypoints.filter((fix, i, arr) => i === 0 || fix !== arr[i - 1]);
 }
 
 // ======================= ADD STRIP =======================
@@ -232,7 +153,7 @@ function buildOceanicStrip(f) {
                   ? f.prefilledFixes 
                   : [];
 
-  var colCount = Math.min(Math.max(waypoints.length, 4), 12);
+  const colCount = Math.min(Math.max(waypoints.length, 4), 12);
 
   const table = document.createElement("table");
   table.style.width = "100%";
@@ -247,6 +168,7 @@ function buildOceanicStrip(f) {
       <td rowspan="3" style="font-weight:bold; background:#dbeafe; border:1px solid #2563eb; width:40px;">${flNum}</td>
       ${Array.from({length: colCount}).map((_, i) => {
         const fix = waypoints[i] || "";
+        // ✅ ONLY CHANGE HERE
         const highlightClass = isOceanicFix(fix) ? "highlighted-fix" : "";
         return `<td><input class="act-box ${highlightClass}" value="${fix}" placeholder="FIX"></td>`;
       }).join('')}

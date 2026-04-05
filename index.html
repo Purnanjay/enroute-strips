@@ -275,7 +275,7 @@
     }
 
     input:checked + .slider {
-      background-color: #3a7bd5;
+      background-color: white;
     }
 
     input:checked + .slider:before {
@@ -306,7 +306,7 @@
 
     <div class="control-group">
       <input id="customStripText" placeholder="Custom strip text" />
-      <button id="addCustomStripBtn">Add Custom</button>
+      <button id="addCustomStrip">Add Custom</button>
     </div>
 
     <!--<div class="control-group" style="min-width: auto; width: auto;">
@@ -326,6 +326,10 @@
   <!-- Dark mode logic -->
   <script>
     document.addEventListener('DOMContentLoaded', () => {
+
+      document.getElementById("addOceanicBtn").onclick = addOceanicStrip;
+      document.getElementById("addCustomStrip").onclick = addCustomStrip;
+      render();
       const toggle = document.getElementById('darkModeToggle');
       const body = document.body;
 

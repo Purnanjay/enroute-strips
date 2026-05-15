@@ -596,7 +596,12 @@ function getDragAfterElement(lane, y, placeholder = null) {
 }
 
 // ======================= CALCULATE ESTIMATES =======================
+// ======================= CALCULATE ESTIMATES =======================
 function calculateEstimates(stripDiv) {
+    const callsign = stripDiv.dataset.callsign;
+    const flight = state.flights[callsign];
+    if (!flight || !flight.stripValues) return;
+
     const table = stripDiv.querySelector("table");
     const estInputs = table.querySelectorAll(".est-box");
     if (estInputs.length === 0) return;
@@ -608,23 +613,41 @@ function calculateEstimates(stripDiv) {
     if (coords.length === 0) return;
 
     let firstEstIndex = -1;
+
+    // SAVE current manual entries FIRST
+    estInputs.forEach((inp, i) => {
+        flight.stripValues.est[i] = inp.value.trim();
+    });
+
     for (let i = 0; i < estInputs.length; i++) {
         if (estInputs[i].value.trim() !== "") {
             firstEstIndex = i;
             break;
         }
     }
+
     if (firstEstIndex === -1) return;
 
     const parseHHMM = str => {
+        str = str.replace(/\D/g, "").padStart(4, "0");
+
         const h = parseInt(str.slice(0, 2), 10) || 0;
         const m = parseInt(str.slice(2, 4), 10) || 0;
+
         return h * 60 + m;
     };
 
     const formatHHMM = mins => {
-        const h = Math.floor(mins / 60).toString().padStart(2, '0');
-        const m = Math.round(mins % 60).toString().padStart(2, '0');
+        mins = ((mins % 1440) + 1440) % 1440;
+
+        const h = Math.floor(mins / 60)
+            .toString()
+            .padStart(2, "0");
+
+        const m = Math.round(mins % 60)
+            .toString()
+            .padStart(2, "0");
+
         return h + m;
     };
 
@@ -633,19 +656,38 @@ function calculateEstimates(stripDiv) {
     for (let i = firstEstIndex + 1; i < estInputs.length; i++) {
         const prev = coords[i - 1];
         const curr = coords[i];
+
         if (!prev || !curr) continue;
 
         const R = 3440.065;
+
         const toRad = deg => deg * Math.PI / 180;
+
         const dLat = toRad(curr.lat - prev.lat);
         const dLon = toRad(curr.lon - prev.lon);
-        const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(prev.lat)) * Math.cos(toRad(curr.lat)) * Math.sin(dLon / 2) ** 2;
+
+        const a =
+            Math.sin(dLat / 2) ** 2 +
+            Math.cos(toRad(prev.lat)) *
+                Math.cos(toRad(curr.lat)) *
+                Math.sin(dLon / 2) ** 2;
+
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
         const dist = R * c;
 
         baseMins += (dist / gs) * 60;
-        estInputs[i].value = formatHHMM(baseMins);
+
+        const calculated = formatHHMM(baseMins);
+
+        estInputs[i].value = calculated;
+
+        // THIS IS THE FIX
+        // Persist calculated estimates into state
+        flight.stripValues.est[i] = calculated;
     }
+
+    saveOrders();
 }
 
 // ======================= SAVE & RENDER =======================
@@ -721,3 +763,6 @@ document.addEventListener("DOMContentLoaded", () => {
     render();
     window.addEventListener("beforeprint", saveOrders);
 });
+
+
+//python3 -m http.server

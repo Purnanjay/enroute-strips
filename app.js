@@ -348,7 +348,7 @@ function buildOceanicStrip(f) {
         <tr>
             <td colspan="2" style="background:#fde047; font-weight:bold; color:black; border:1px solid black;">${f.callsign}</td>
             <td><input class="act-box mach-box" value="${stripValues.mach}" placeholder="MACH"></td>
-            ${Array.from({length: colCount}).map((_, i) => `<td><input class="act-box est-box" value="${stripValues.est[i] || ''}" placeholder="EST"></td>`).join('')}
+            ${Array.from({length: colCount}).map((_, i) => `<td><input class="act-box est-box" value="''}" placeholder="EST"></td>`).join('')}
         </tr>
         <tr>
             <td></td>

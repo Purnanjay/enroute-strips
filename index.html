@@ -82,7 +82,8 @@
       transition: all 0.3s;
     }
 
-    body.dark .controls input {
+    body.dark .controls input,
+    body.dark .controls select {
       background: #1e2937;
       color: #e2e8f0;
       border: 1px solid #475569;
@@ -298,6 +299,11 @@
   </div>
 
   <div class="controls">
+
+    <div class="control-group">
+      <label for="sectorSelect" style="font-size: 13px; color: #555;">Sector</label>
+      <select id="sectorSelect" style="padding: 8px 12px; border-radius: 6px; border: 1px solid #9ca3af; font-size: 14px; width: 100%; max-width: 220px; text-align: center; background: white; box-sizing: border-box;"></select>
+    </div>
     
     <div class="control-group">
       <input id="oceanicCallsign" placeholder="Callsign" />
@@ -306,7 +312,7 @@
 
     <div class="control-group">
       <input id="customStripText" placeholder="Custom strip text" />
-      <button id="addCustomStrip">Add Custom</button>
+      <button id="addCustomBtn">Add Custom</button>
     </div>
 
     <!--<div class="control-group" style="min-width: auto; width: auto;">
@@ -326,11 +332,8 @@
   <!-- Dark mode logic -->
   <script>
     document.addEventListener('DOMContentLoaded', () => {
-
-      document.getElementById("addOceanicBtn").onclick = addOceanicStrip;
-      document.getElementById("addCustomStrip").onclick = addCustomStrip;
-      render();
       const toggle = document.getElementById('darkModeToggle');
+      if (!toggle) return;
       const body = document.body;
 
       if (localStorage.getItem('darkMode') === 'enabled') {

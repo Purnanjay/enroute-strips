@@ -1,89 +1,71 @@
 // ======================= CONFIG =======================
 const API_URL = "https://data.vatsim.net/v3/vatsim-data.json";
 
-const MODES = {
-    oceanic: ["planned", "cruise", "exit"]
+const SECTORS = {
+    chennai: {
+        id: "chennai",
+        label: "Chennai Oceanic",
+        lanes: ["planned", "cruise", "exit"],
+        fixes: [
+            "RASKI", "PARAR", "TOTOX", "BISET", "REXOD", "LEGEN", "MEPAT", "NINOB",
+            "OPIRA", "OMDEV", "OSUPI", "LOTAV", "LEMAX", "MESAN", "NITIX", "OSIRI",
+            "VASTU", "IGAMA", "KITAL", "LADIB", "METIP", "NIVUD", "OTABI", "OLNIK",
+            "POMAN", "BOLUR", "DONSA", "GOLEM", "ESMIT", "BIBGO", "APUNA", "EGOGI",
+            "ODOLI", "GOKUM", "OLINK", "BEDIL", "ASPUX", "MAMIG", "RIGLO", "ANGAL",
+            "GIDAS", "UNRIV", "MOXET", "UGPEG", "ENBAD", "GOBIG", "ELKEL", "RULSA",
+            "RIBTO", "CLAVA", "MAGUG", "OMLEV", "NABIL", "ORLID", "VUTAS", "OTKIR",
+            "GOSGU", "BUSUX", "LEVLU", "PERRY", "MURUS"
+        ]
+    },
+    mumbai: {
+        id: "mumbai",
+        label: "Mumbai Oceanic",
+        lanes: ["planned", "cruise", "exit"],
+        // Mumbai sector waypoints (ADKIT → BIDEX)
+        fixes: [
+            "ADKIT", "XOKRO", "SADRI", "MEMAK", "GIRNA", "ELSAR", "DUBTA", "NOPEK",
+            "SULTO", "RUPTI", "SAMAK", "AVNOS", "ATIDA", "APASI", "ANOKO", "IDASO",
+            "BIKEN", "LAGOG", "IGOGU", "MANPU", "DUMAR", "AMVUR", "AGEGA", "DUGOS",
+            "NIMOV", "PPB", "LADER", "LULDA", "IGREX", "VATLA", "LEGIN", "NISUN",
+            "MIPAK", "EGOLU", "BIDEX"
+        ]
+    }
 };
 
+const SECTOR_FIX_SETS = Object.fromEntries(
+    Object.entries(SECTORS).map(([id, sector]) => [id, new Set(sector.fixes)])
+);
+
 const state = {
-    mode: "oceanic",
+    sector: localStorage.getItem("sector_vstrips") || "chennai",
     positions: JSON.parse(localStorage.getItem("positions_vstrips") || "{}"),
     orders: JSON.parse(localStorage.getItem("orders_vstrips") || "{}"),
     flights: JSON.parse(localStorage.getItem("flights_vstrips") || "{}")
 };
 
-const AIRWAY_DB = [
- "RASKI",
- "PARAR",
- "TOTOX",
- "BISET",
- "REXOD",
- "LEGEN",
- "MEPAT",
- "NINOB",
- "OPIRA",
- "OMDEV",
- "OSUPI",
- "LOTAV",
- "LEMAX",
- "MESAN",
- "NITIX",
- "OSIRI",
- "VASTU",
- "IGAMA",
- "KITAL",
- "LADIB",
- "METIP",
- "NIVUD",
- "OTABI",
- "OLNIK",
- "POMAN",
- "BOLUR",
- "DONSA",
- "GOLEM",
- "ESMIT",
- "BIBGO",
- "APUNA",
- "EGOGI",
- "ODOLI",
- "GOKUM",
- "OLINK",
- "BEDIL",
- "ASPUX",
- "MAMIG",
- "RIGLO",
- "ANGAL",
- "GIDAS",
- "UNRIV",
- "MOXET",
- "UGPEG",
- "ENBAD",
- "GOBIG",
- "ELKEL",
- "RULSA",
- "RIBTO",
- "CLAVA",
- "MAGUG",
- "OMLEV",
- "NABIL",
- "ORLID",
- "VUTAS",
- "OTKIR",
- "GOSGU",
- "BUSUX",
- "LEVLU",
- "PERRY",
- "MURUS"
-];
+function getSectorConfig(sectorId = state.sector) {
+    return SECTORS[sectorId] || SECTORS.chennai;
+}
 
-const OCEANIC_FIX_SET = new Set(AIRWAY_DB);
+function getSectorFixSet(sectorId = state.sector) {
+    return SECTOR_FIX_SETS[sectorId] || SECTOR_FIX_SETS.chennai;
+}
+
+function setActiveSector(sectorId) {
+    if (!SECTORS[sectorId]) return;
+    state.sector = sectorId;
+    localStorage.setItem("sector_vstrips", sectorId);
+    render();
+}
 
 // ======================= DATA =======================
 let AIRWAY_INDEX = {};
 let FIX_DB = {};
 let FIX_COORDS = {};
 
-const AIRWAY_FIX_SET = new Set(AIRWAY_DB);
+const AIRWAY_FIX_SET = new Set(
+    Object.values(SECTORS).flatMap(sector => sector.fixes)
+);
 
 async function loadData() {
     try {
@@ -101,6 +83,9 @@ async function loadData() {
             });
         });
         console.log("✅ Airway graph loaded");
+        if (document.getElementById("board")) {
+            render();
+        }
     } catch (err) {
         console.warn("Data files not found");
     }
@@ -188,7 +173,9 @@ function expandRoute(tokens) {
     return expanded;
 }
 
-function isOceanicFix(fix) { return OCEANIC_FIX_SET.has(fix); }
+function isSectorFix(fix, sectorId = state.sector) {
+    return getSectorFixSet(sectorId).has(fix);
+}
 
 function extractRegistration(remarks) {
     if (!remarks || typeof remarks !== 'string') return "----";
@@ -211,13 +198,14 @@ function normalizeFixes(fixes) {
         .filter(fix => fix.length > 0);
 }
 
-function matchOceanicFixes(fixes) {
-    return normalizeFixes(fixes).filter(fix => OCEANIC_FIX_SET.has(fix));
+function matchSectorFixes(fixes, sectorId = state.sector) {
+    const fixSet = getSectorFixSet(sectorId);
+    return normalizeFixes(fixes).filter(fix => fixSet.has(fix));
 }
 
-function expandRouteFromVatsim(route) {
+function expandRouteFromVatsim(route, sectorId = state.sector) {
     const expanded = expandRouteToFixes(route);
-    return matchOceanicFixes(expanded);
+    return matchSectorFixes(expanded, sectorId);
 }
 
 function getDirectionFromFixes(fixes) {
@@ -241,7 +229,7 @@ async function addOceanicStrip() {
 
         const fp = p.flight_plan || {};
         const expandedFixes = expandRouteToFixes(fp.route);
-        const matchingFixes = matchOceanicFixes(expandedFixes);
+        const matchingFixes = matchSectorFixes(expandedFixes);
         console.log('expandedFixes:', expandedFixes, 'matchingFixes:', matchingFixes);
 
         state.flights[callsign] = {
@@ -252,6 +240,7 @@ async function addOceanicStrip() {
             cruise: fp.altitude || "----",
             registration: extractRegistration(fp.remarks),
             type: "oceanic",
+            sector: state.sector,
             prefilledFixes: matchingFixes.length > 0 ? matchingFixes : null,
             stripValues: {
                 altitude: parseInt(fp.altitude?.toString().replace(/\D/g, ''), 10) || "",
@@ -280,6 +269,7 @@ function addCustomStrip() {
         callsign: "CUSTOM-" + Date.now(),
         aircraft: text,
         dep: "", arr: "", cruise: "----", registration: "",
+        sector: state.sector,
         prefilledFixes: [],
         stripValues: {
             text
@@ -293,7 +283,12 @@ function addCustomStrip() {
     input.value = "";
 }
 
-// ======================= BUILD STRIPS =======================
+function formatFlDisplay(altitude, flNum) {
+    const n = parseInt(altitude, 10);
+    if (!n) return flNum || "";
+    return n >= 1000 ? Math.floor(n / 100) : n;
+}
+
 function buildOceanicStrip(f) {
     const div = document.createElement("div");
     div.className = "strip oceanic";
@@ -307,7 +302,8 @@ function buildOceanicStrip(f) {
             ? f.stripValues.fixes
             : (f.prefilledFixes || [])
     );
-    const displayFixes = matchOceanicFixes(savedFixes);
+    const flightSector = f.sector || "chennai";
+    const displayFixes = matchSectorFixes(savedFixes, flightSector);
     f.stripValues = f.stripValues || {};
     f.stripValues.altitude = f.stripValues.altitude ?? flNum;
     f.stripValues.fixes = displayFixes;
@@ -338,17 +334,17 @@ function buildOceanicStrip(f) {
             <td class="callsign-cell" style="font-weight:bold; cursor:pointer;">${f.aircraft}</td>
             <td>1</td>
             <td>${f.dep}</td>
-            <td rowspan="3" style="font-weight:bold; border:1px solid #2563eb; width:40px;"><input class="alt-box" value="${stripValues.altitude/100}" placeholder="${flNum}"></td>
+            <td rowspan="3" style="font-weight:bold; border:1px solid #2563eb; width:40px;"><input class="alt-box" value="${formatFlDisplay(stripValues.altitude, flNum)}" placeholder="${flNum}"></td>
             ${Array.from({length: colCount}).map((_, i) => {
                 const fix = stripValues.fixes[i] || "";
-                const highlightClass = isOceanicFix(fix) ? "highlighted-fix" : "";
+                const highlightClass = isSectorFix(fix, flightSector) ? "highlighted-fix" : "";
                 return `<td><input class="act-box fix-box ${highlightClass}" value="${fix}" placeholder="FIX"></td>`;
             }).join('')}
         </tr>
         <tr>
             <td colspan="2" style="background:#fde047; font-weight:bold; color:black; border:1px solid black;">${f.callsign}</td>
             <td><input class="act-box mach-box" value="${stripValues.mach}" placeholder="MACH"></td>
-            ${Array.from({length: colCount}).map((_, i) => `<td><input class="act-box est-box" value="''}" placeholder="EST"></td>`).join('')}
+            ${Array.from({length: colCount}).map((_, i) => `<td><input class="act-box est-box" value="${stripValues.est[i] || ''}" placeholder="EST"></td>`).join('')}
         </tr>
         <tr>
             <td></td>
@@ -391,6 +387,7 @@ function buildOceanicStrip(f) {
     if (machInput) {
         machInput.addEventListener("input", () => {
             f.stripValues.mach = machInput.value;
+            calculateEstimates(div);
             saveOrders();
         });
     }
@@ -400,6 +397,7 @@ function buildOceanicStrip(f) {
             const value = inp.value.toUpperCase().trim();
             f.stripValues.fixes[i] = value;
             div.fixCoords[i] = FIX_COORDS[value] || {lat: 0, lon: 0};
+            calculateEstimates(div);
             saveOrders();
         });
     });
@@ -623,6 +621,7 @@ function calculateEstimates(stripDiv) {
         const curr = coords[i];
 
         if (!prev || !curr) continue;
+        if (!prev.lat && !prev.lon && !curr.lat && !curr.lon) continue;
 
         const R = 3440.065;
 
@@ -657,7 +656,11 @@ function calculateEstimates(stripDiv) {
 
 // ======================= SAVE & RENDER =======================
 function getCols() {
-    return MODES[state.mode];
+    return getSectorConfig().lanes;
+}
+
+function getFlightsForActiveSector() {
+    return Object.values(state.flights).filter(f => (f.sector || "chennai") === state.sector);
 }
 
 function saveOrders() {
@@ -689,7 +692,7 @@ function render() {
 
     getCols().forEach(col => {
         const lane = document.getElementById(col);
-        Object.values(state.flights)
+        getFlightsForActiveSector()
             .filter(f => state.positions[f.callsign] === col)
             .forEach(f => {
                 const strip = f.callsign.startsWith("CUSTOM-") ? buildCustomStrip(f) : buildOceanicStrip(f);
@@ -723,6 +726,15 @@ setInterval(updateUTCTime, 1000);
 
 // ======================= INIT =======================
 document.addEventListener("DOMContentLoaded", () => {
+    const sectorSelect = document.getElementById("sectorSelect");
+    if (sectorSelect) {
+        sectorSelect.innerHTML = Object.values(SECTORS)
+            .map(sector => `<option value="${sector.id}">${sector.label}</option>`)
+            .join("");
+        sectorSelect.value = state.sector;
+        sectorSelect.addEventListener("change", () => setActiveSector(sectorSelect.value));
+    }
+
     document.getElementById("addOceanicBtn").onclick = addOceanicStrip;
     document.getElementById("addCustomBtn").onclick = addCustomStrip;
     render();

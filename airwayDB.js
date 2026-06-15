@@ -9,7 +9,7 @@ const AIRWAY_DB = [
  "GIRNA",
  "ELSAR",
  "DUBTA",
- "NOPEX",
+ "NOPEK",
  "SULTO",
  "RUPTI",
  "SAMAK",
